@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ToastProvider, useToast } from "./ToastContext";
 import type { QueueItem, MessageStatus, MessageCategory } from "@/types";
 
 // Dane przykładowe
@@ -58,19 +59,36 @@ const PRIORITY_DOT: Record<string, string> = {
 	low: "bg-zinc-500",
 };
 
-// QueuePage
-export default function QueuePage() {
+// QueueContent
+function QueueContent() {
 	const [items, setItems] = useState<QueueItem[]>(SEED_ITEMS);
 	const [filter, setFilter] = useState<MessageCategory | "all">("all");
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editingText, setEditingText] = useState("");
+	const { toast } = useToast();
 
 	const pendingCount = items.filter((i) => i.status === "pending").length;
 
 	function handleAction(id: string, action: MessageStatus) {
+		const prevItem = items.find((i) => i.id === id);
+		if (!prevItem) return;
+
 		setItems((cur) =>
 			cur.map((item) => (item.id === id ? { ...item, status: action } : item)),
 		);
+
+		toast({
+			type: action === "approved" ? "success" : "error",
+			title: action === "approved" ? "Zatwierdzono" : "Odrzucono",
+			message: "Akcja wykonana pomyślnie.",
+			onUndo: () => {
+				setItems((cur) =>
+					cur.map((item) =>
+						item.id === id ? { ...item, status: "pending" } : item,
+					),
+				);
+			},
+		});
 	}
 
 	function handleEditStart(item: QueueItem) {
@@ -79,12 +97,26 @@ export default function QueuePage() {
 	}
 
 	function handleEditSave(id: string) {
+		const oldText = items.find((i) => i.id === id)?.draft_reply || "";
 		setItems((cur) =>
 			cur.map((item) =>
 				item.id === id ? { ...item, draft_reply: editingText } : item,
 			),
 		);
 		setEditingId(null);
+
+		toast({
+			type: "info",
+			title: "Zapisano",
+			message: "Draft został zaktualizowany.",
+			onUndo: () => {
+				setItems((cur) =>
+					cur.map((item) =>
+						item.id === id ? { ...item, draft_reply: oldText } : item,
+					),
+				);
+			},
+		});
 	}
 
 	function handleEditCancel() {
@@ -142,7 +174,10 @@ export default function QueuePage() {
 						className={`rounded-xl border p-5 transition-opacity ${
 							item.status !== "pending" ? "opacity-50" : ""
 						}`}
-						style={{ background: "var(--card)", borderColor: "var(--border)" }}
+						style={{
+							background: "var(--card)",
+							borderColor: "var(--border)",
+						}}
 					>
 						<div className="flex items-start justify-between gap-4 mb-3">
 							<div className="flex items-center gap-2 flex-wrap">
@@ -240,5 +275,13 @@ export default function QueuePage() {
 				))}
 			</div>
 		</main>
+	);
+}
+
+export default function QueuePage() {
+	return (
+		<ToastProvider>
+			<QueueContent />
+		</ToastProvider>
 	);
 }
